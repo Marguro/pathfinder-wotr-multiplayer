@@ -2058,6 +2058,57 @@ namespace WOTRMultiplayer.Services.GameInteraction
             });
         }
 
+        public void StartNewGameCompanionCreation(string unitId, Action<UnitEntityData> onCommitted)
+        {
+            _mainThreadAccessor.Post(() =>
+            {
+                try
+                {
+                    UnitEntityData unit;
+                    using (ContextData<UnitEntityData.ChargenUnit>.Request())
+                    {
+                        unit = new UnitEntityData(unitId, isInGame: false, Kingmaker.UnitLogic.UnitHelper.CustomCompanion());
+                        // matches Player.CreateCustomCompanion's own attachment - unlike the
+                        // main-menu chargen unit (AttachToViewOnLoad), this runs during an active
+                        // game session, so the view can be created immediately
+                        unit.AttachView(unit.CreateView());
+                    }
+
+                    Kingmaker.UnitLogic.Class.LevelUp.LevelUpConfig.Create(unit, Kingmaker.UnitLogic.Class.LevelUp.LevelUpState.CharBuildMode.CharGen)
+                        // deferred via ScheduleAction, matching Player.CreateCustomCompanion's own
+                        // OnCommit handling - Commit() is still unwinding when this fires
+                        .SetOnCommit(_ => Game.Instance.ScheduleAction(() => onCommitted?.Invoke(unit)))
+                        .OpenUI();
+
+                    _logger.LogInformation("Started New Campaign companion creation. UnitId={UnitId}", unitId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error while starting New Campaign companion creation. UnitId={UnitId}", unitId);
+                    throw;
+                }
+            });
+        }
+
+        public void AttachNewGameCompanionToParty(UnitEntityData unit)
+        {
+            _mainThreadAccessor.Post(() =>
+            {
+                try
+                {
+                    Game.Instance.Player.AddCompanion(unit);
+                    unit.IsInGame = true;
+                    unit.Position = Game.Instance.Player.MainCharacter.Value.Position;
+                    _logger.LogInformation("New Campaign companion has been attached to the party. UnitId={UnitId}", unit.UniqueId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error while attaching New Campaign companion to the party. UnitId={UnitId}", unit.UniqueId);
+                    throw;
+                }
+            });
+        }
+
         public void UpdateNewGameSequencePhaseControls(bool isEnabled, NetworkNewGameSequencePhaseType newGameSequencePhaseType)
         {
             _mainThreadAccessor.Post(() =>

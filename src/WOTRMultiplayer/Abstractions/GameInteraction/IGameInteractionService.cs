@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Kingmaker.EntitySystem;
+using Kingmaker.EntitySystem.Entities;
 using Kingmaker.GameModes;
 using Kingmaker.Items.Slots;
 using WOTRMultiplayer.Entities;
@@ -179,6 +180,21 @@ namespace WOTRMultiplayer.Abstractions.GameInteraction
         void StartNewGameSequenceLeveling();
 
         void TerminateNewGameSequence();
+
+        /// <summary>
+        /// Builds a fresh, standalone chargen unit for a second (or further) player-created
+        /// character and opens the CharGen UI for it - independent of the New Campaign wizard,
+        /// used after the game world has already loaded. <paramref name="onCommitted"/> fires
+        /// once the owning player finishes building the character (mirrored on every machine,
+        /// same as any other leveling session), so the caller can attach it to the party.
+        /// </summary>
+        void StartNewGameCompanionCreation(string unitId, Action<UnitEntityData> onCommitted);
+
+        /// <summary>
+        /// Attaches a chargen'd New Campaign companion (see <see cref="StartNewGameCompanionCreation"/>)
+        /// to the active party. Safe to call once the game world has loaded.
+        /// </summary>
+        void AttachNewGameCompanionToParty(UnitEntityData unit);
 
         NetworkArea GetCurrentArea();
 

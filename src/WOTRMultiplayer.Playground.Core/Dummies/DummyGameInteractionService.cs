@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Kingmaker.EntitySystem;
+using Kingmaker.EntitySystem.Entities;
 using Kingmaker.GameModes;
 using Kingmaker.Items.Slots;
 using WOTRMultiplayer.Abstractions.GameInteraction;
@@ -293,6 +294,14 @@ namespace WOTRMultiplayer.Playground.Core.Dummies
         }
 
         public void StartNewGameSequenceLeveling()
+        {
+        }
+
+        public void StartNewGameCompanionCreation(string unitId, Action<UnitEntityData> onCommitted)
+        {
+        }
+
+        public void AttachNewGameCompanionToParty(UnitEntityData unit)
         {
         }
 

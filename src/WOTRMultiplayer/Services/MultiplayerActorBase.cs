@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using Kingmaker.Controllers.Rest;
+using Kingmaker.EntitySystem.Entities;
 using Kingmaker.GameModes;
 using Kingmaker.UI.Kingdom;
 using Kingmaker.Utility;
@@ -477,6 +478,46 @@ namespace WOTRMultiplayer.Services
             // Tutorial settings are save-dependent, so they must be overridden if the save was created without the mod
             var settings = new NetworkGameSettings { Tutorial = new NetworkTutorialSettings() };
             GameInteraction.ApplyGameSettings(settings);
+
+            StartPendingNewGameCompanionCreation();
+        }
+
+        /// <summary>
+        /// For a fresh New Campaign game, additional connected players (beyond the vanilla main
+        /// character) each get their own lobby-assigned chargen slot (see
+        /// HostMenuItemController.CreateGameStartUp). Once the game world has loaded, each of
+        /// those slots gets its own standalone CharGen session, one at a time - driven
+        /// identically on every machine from the synced Game.Characters list, so no
+        /// host-mediated request/queue is needed. Re-entrant: called again after every
+        /// NewGameCompanion session ends (see OnLevelingCompleted/OnLevelingTerminated) to start
+        /// the next pending one, and safe to call on every OnGameLoaded (e.g. a later quickload)
+        /// since already-created characters are skipped via the live-state check below.
+        /// </summary>
+        protected void StartPendingNewGameCompanionCreation()
+        {
+            if (Game.StartUp?.IsNewGameSequence != true || Game.Leveling != null)
+            {
+                return;
+            }
+
+            var pending = Game.Characters
+                .Skip(1) // first slot is the vanilla main character, handled by the existing New Campaign wizard
+                .FirstOrDefault(c => c.Owner != null && !string.IsNullOrEmpty(c.UnitId) && !GameInteraction.IsUnitInParty(c.UnitId));
+
+            if (pending == null)
+            {
+                return;
+            }
+
+            Logger.LogInformation("Starting pending New Campaign companion creation. UnitId={UnitId}, OwnerId={OwnerId}", pending.UnitId, pending.Owner.Id);
+
+            OnForceLevelingUI(pending.UnitId, NetworkLevelingType.NewGameCompanion);
+            GameInteraction.StartNewGameCompanionCreation(pending.UnitId, OnNewGameCompanionCommitted);
+        }
+
+        private void OnNewGameCompanionCommitted(UnitEntityData unit)
+        {
+            GameInteraction.AttachNewGameCompanionToParty(unit);
         }
 
         public void OnPing(NetworkPing ping)
@@ -975,6 +1016,10 @@ namespace WOTRMultiplayer.Services
                 // we don't have character id yet, so we rely on 'fake' character
                 NetworkLevelingType.NewGameSequence => Game.Characters.FirstOrDefault()?.Owner?.Id == Game.LocalPlayerId,
                 NetworkLevelingType.Mercenary => HasControlOverUI,
+                // resolved against the lobby-assigned owner of this specific chargen slot (not
+                // necessarily the first character), since this is a second/further player
+                // building their own character before it exists in game state
+                NetworkLevelingType.NewGameCompanion => Game.Characters.FirstOrDefault(c => c.UnitId == Game.Leveling.UnitId)?.Owner?.Id == Game.LocalPlayerId,
                 // either this character has been controlled by someone previously (and that player is still in lobby) or fallback to default
                 _ => WasControlledByCurrentPlayer(Game.Leveling.UnitId),
             };
@@ -1532,7 +1577,7 @@ namespace WOTRMultiplayer.Services
             {
                 NetworkLevelingType.MythicLeveling => WellKnownKeys.GameNotifications.Leveling.MythicLeveling.Terminated.Key,
                 NetworkLevelingType.Mercenary => WellKnownKeys.GameNotifications.Leveling.Mercenary.Terminated.Key,
-                NetworkLevelingType.NewGameSequence => null,
+                NetworkLevelingType.NewGameSequence or NetworkLevelingType.NewGameCompanion => null,
                 NetworkLevelingType.Leveling or _ => WellKnownKeys.GameNotifications.Leveling.Terminated.Key
             };
 
@@ -1542,6 +1587,10 @@ namespace WOTRMultiplayer.Services
             }
 
             Game.Leveling = null;
+
+            // Deliberately not retrying here even if this was a NewGameCompanion session -
+            // the owner just cancelled, so immediately reopening the same session would loop.
+            // That slot stays pending; a later OnGameLoaded (e.g. reconnect/reload) retries it.
         }
 
         public void OnLevelingCompleted()
@@ -1558,7 +1607,7 @@ namespace WOTRMultiplayer.Services
             {
                 NetworkLevelingType.MythicLeveling => WellKnownKeys.GameNotifications.Leveling.MythicLeveling.Completed.Key,
                 NetworkLevelingType.Mercenary => WellKnownKeys.GameNotifications.Leveling.Mercenary.Completed.Key,
-                NetworkLevelingType.NewGameSequence or NetworkLevelingType.DungeonRestart => null,
+                NetworkLevelingType.NewGameSequence or NetworkLevelingType.DungeonRestart or NetworkLevelingType.NewGameCompanion => null,
                 NetworkLevelingType.Leveling or _ => WellKnownKeys.GameNotifications.Leveling.Completed.Key,
             };
 
@@ -1573,7 +1622,14 @@ namespace WOTRMultiplayer.Services
                 UpdateCharactersOwnership();
             }
 
+            var wasNewGameCompanion = Game.Leveling.Type == NetworkLevelingType.NewGameCompanion;
             Game.Leveling = null;
+
+            if (wasNewGameCompanion)
+            {
+                // start the next pending companion's CharGen, if there is one (3+ players)
+                StartPendingNewGameCompanionCreation();
+            }
         }
 
         public void OnCharacterSelectionWindowShown()
@@ -4034,13 +4090,25 @@ namespace WOTRMultiplayer.Services
 
         private async void OnNotifyCutsceneSkipped(long playerId, NotifyCutsceneSkipped message)
         {
-            var isCutscene = await WaitWhileTrue(() => GameInteraction.CurrentGameMode != GameModeType.Cutscene, "Waiting for cutscene to be played before applying skip");
-            if (!isCutscene)
-            {
-                return;
-            }
+            // A slow-loading/stuttering client can legitimately take longer than the default
+            // 20s wait to even enter Cutscene mode. Previously, timing out here meant the skip
+            // was silently dropped for this player - their local cutscene kept playing to
+            // completion, permanently desynced from everyone who did apply the skip. Instead,
+            // always apply the skip once the wait ends (whether it resolved normally or timed
+            // out) so the player eventually converges; SkipCutscene() is idempotent-safe if
+            // there's nothing to skip.
+            var enteredCutsceneInTime = await WaitWhileTrue(
+                () => GameInteraction.CurrentGameMode != GameModeType.Cutscene,
+                "Waiting for cutscene to be played before applying skip",
+                awaiterTimeout: TimeSpan.FromMinutes(3));
 
             var player = GetPlayer(message.PlayerId);
+
+            if (!enteredCutsceneInTime)
+            {
+                Logger.LogWarning("Cutscene skip sync timed out waiting to enter Cutscene mode; forcing skip anyway to avoid a permanent desync. PlayerId={PlayerId}, PlayerName={PlayerName}", message.PlayerId, player?.Name);
+            }
+
             GameInteraction.SkipCutscene(player.Name);
         }
 

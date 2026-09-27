@@ -2127,9 +2127,23 @@ namespace WOTRMultiplayer.Services
                 Endpoint = endpoint
             };
 
-            foreach (var character in Game.Characters)
+            if (Game.StartUp?.IsNewGameSequence == true)
             {
-                character.Owner = hostPlayer;
+                // Only the first (vanilla main character) slot defaults to host - the rest
+                // are left unowned so they can be assigned to other connected players via the
+                // existing lobby owner dropdown, letting them build their own character.
+                var firstCharacter = Game.Characters.FirstOrDefault();
+                if (firstCharacter != null)
+                {
+                    firstCharacter.Owner = hostPlayer;
+                }
+            }
+            else
+            {
+                foreach (var character in Game.Characters)
+                {
+                    character.Owner = hostPlayer;
+                }
             }
 
             var enforcedSettings = GetEnforcedGameSettings();
@@ -2196,12 +2210,27 @@ namespace WOTRMultiplayer.Services
                     var playersChanged = CreateNotifyLobbyPlayersChanged();
                     Send(playersChanged);
 
+                    // New Campaign only starts with 2 chargen slots (see
+                    // HostMenuItemController.CreateGameStartUp) - grow the list here so a 3rd,
+                    // 4th, etc. connecting player also has an unowned slot to claim and build
+                    // their own character with.
+                    var addedNewCharacterSlot = EnsureUnownedNewGameSequenceCharacterSlot();
+
                     var lobbyCharactersChanged = new NotifyLobbyCharactersChanged
                     {
                         Title = Game.StartUp?.Title,
                         Characters = Mapper.Map<List<Networking.Messages.Contracts.NetworkCharacter>>(Game.Characters)
                     };
-                    Send(playerId, lobbyCharactersChanged);
+
+                    if (addedNewCharacterSlot)
+                    {
+                        // existing players need to see the new slot too, not just the new one
+                        Send(lobbyCharactersChanged);
+                    }
+                    else
+                    {
+                        Send(playerId, lobbyCharactersChanged);
+                    }
 
                     InvokeOnPlayersChanged();
 
@@ -2213,6 +2242,26 @@ namespace WOTRMultiplayer.Services
                 Logger.LogError(ex, "Unable to handle player name response");
                 throw;
             }
+        }
+
+        private bool EnsureUnownedNewGameSequenceCharacterSlot()
+        {
+            if (Game.StartUp?.IsNewGameSequence != true
+                || Game.Characters.Count >= Main.MaxCharactersInParty
+                || Game.Characters.Any(c => c.Owner == null))
+            {
+                return false;
+            }
+
+            var newCharacter = new NetworkCharacter
+            {
+                Portrait = "b7aa1433ab20e3745a4a169ee34ca738_MaskGolem",
+                UnitId = Guid.NewGuid().ToString()
+            };
+            Game.Characters.Add(newCharacter);
+
+            Logger.LogInformation("Added a new New Campaign character slot for an additional connected player. UnitId={UnitId}", newCharacter.UnitId);
+            return true;
         }
 
         private NetworkColor GetPlayerColor(string playerName)

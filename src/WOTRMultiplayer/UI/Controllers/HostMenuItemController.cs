@@ -327,17 +327,26 @@ namespace WOTRMultiplayer.UI.Controllers
             if (string.Equals(saveSlot.GameId.Value, NewGameSequenceId, StringComparison.OrdinalIgnoreCase))
             {
                 var mainCharacterId = Guid.NewGuid().ToString();
+                var secondCharacterId = Guid.NewGuid().ToString();
                 var newGameSequence = new NetworkGameStartUp
                 {
-                    // empty character that can be used to assign control for leveling (CharGen) screen
-                    Characters = [new NetworkCharacter { Portrait = "b7aa1433ab20e3745a4a169ee34ca738_MaskGolem", UnitId = mainCharacterId }],
+                    // Empty characters used to assign control for the leveling (CharGen) screen.
+                    // The first slot is the vanilla main character (host by default). The second
+                    // slot lets another connected player build their own character from scratch;
+                    // it joins the party as a companion once the game has loaded - see
+                    // MultiplayerActorBase.OnGameLoaded / StartPendingNewGameCompanionCreation.
+                    Characters =
+                    [
+                        new NetworkCharacter { Portrait = "b7aa1433ab20e3745a4a169ee34ca738_MaskGolem", UnitId = mainCharacterId },
+                        new NetworkCharacter { Portrait = "b7aa1433ab20e3745a4a169ee34ca738_MaskGolem", UnitId = secondCharacterId },
+                    ],
                     Title = saveSlot.SaveName.Value,
                     IsNewGameSequence = true,
                     AutoStart = false
                 };
 
                 var gameId = Guid.NewGuid().ToString("N");
-                _logger.LogInformation("Fake new campaign startup has been generated. GameId={GameId}, MainCharacterId={MainCharacterId}", gameId, mainCharacterId);
+                _logger.LogInformation("Fake new campaign startup has been generated. GameId={GameId}, MainCharacterId={MainCharacterId}, SecondCharacterId={SecondCharacterId}", gameId, mainCharacterId, secondCharacterId);
                 return (gameId, newGameSequence);
             }
 
