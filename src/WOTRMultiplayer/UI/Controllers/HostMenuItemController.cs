@@ -326,11 +326,17 @@ namespace WOTRMultiplayer.UI.Controllers
         {
             if (string.Equals(saveSlot.GameId.Value, NewGameSequenceId, StringComparison.OrdinalIgnoreCase))
             {
+                const string placeholderPortrait = "b7aa1433ab20e3745a4a169ee34ca738_MaskGolem";
                 var mainCharacterId = Guid.NewGuid().ToString();
                 var newGameSequence = new NetworkGameStartUp
                 {
-                    // empty character that can be used to assign control for leveling (CharGen) screen
-                    Characters = [new NetworkCharacter { Portrait = "b7aa1433ab20e3745a4a169ee34ca738_MaskGolem", UnitId = mainCharacterId }],
+                    // empty characters that can be used to assign control for leveling (CharGen) screens;
+                    // one slot per connected player, growing dynamically as more players join (see MultiplayerHost.OnClientGameServerConnectionConfirmed)
+                    Characters =
+                    [
+                        new NetworkCharacter { Portrait = placeholderPortrait, UnitId = mainCharacterId },
+                        new NetworkCharacter { Portrait = placeholderPortrait, UnitId = Guid.NewGuid().ToString() }
+                    ],
                     Title = saveSlot.SaveName.Value,
                     IsNewGameSequence = true,
                     AutoStart = false

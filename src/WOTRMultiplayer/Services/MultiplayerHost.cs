@@ -2127,9 +2127,23 @@ namespace WOTRMultiplayer.Services
                 Endpoint = endpoint
             };
 
-            foreach (var character in Game.Characters)
+            // for a brand new campaign, only the first slot (the host's own character) defaults to the host;
+            // the rest stay unowned so they can be assigned to joining players via the lobby owner dropdown.
+            // Loading an existing multi-companion save keeps the previous behaviour of assigning everyone to the host.
+            if (Game.StartUp?.IsNewGameSequence == true)
             {
-                character.Owner = hostPlayer;
+                var firstCharacter = Game.Characters.FirstOrDefault();
+                if (firstCharacter != null)
+                {
+                    firstCharacter.Owner = hostPlayer;
+                }
+            }
+            else
+            {
+                foreach (var character in Game.Characters)
+                {
+                    character.Owner = hostPlayer;
+                }
             }
 
             var enforcedSettings = GetEnforcedGameSettings();
@@ -2196,12 +2210,35 @@ namespace WOTRMultiplayer.Services
                     var playersChanged = CreateNotifyLobbyPlayersChanged();
                     Send(playersChanged);
 
+                    // for a brand new campaign, grow the number of chargen slots to match however many players
+                    // actually connect (up to the party size limit), so every additional player gets their own slot
+                    var addedNewSlot = false;
+                    if (Status == NetworkLobbyStage.Lobby
+                        && Game.StartUp?.IsNewGameSequence == true
+                        && Game.Characters.Count < Main.MaxCharactersInParty
+                        && Game.Characters.All(c => c.Owner != null))
+                    {
+                        Game.Characters.Add(new NetworkCharacter
+                        {
+                            Portrait = Game.Characters[0].Portrait,
+                            UnitId = Guid.NewGuid().ToString()
+                        });
+                        addedNewSlot = true;
+                    }
+
                     var lobbyCharactersChanged = new NotifyLobbyCharactersChanged
                     {
                         Title = Game.StartUp?.Title,
                         Characters = Mapper.Map<List<Networking.Messages.Contracts.NetworkCharacter>>(Game.Characters)
                     };
                     Send(playerId, lobbyCharactersChanged);
+
+                    if (addedNewSlot)
+                    {
+                        // everyone already connected also needs to see the newly added slot
+                        Send(lobbyCharactersChanged);
+                        Logger.LogInformation("New chargen slot has been added for New Campaign. CharactersCount={CharactersCount}", Game.Characters.Count);
+                    }
 
                     InvokeOnPlayersChanged();
 
