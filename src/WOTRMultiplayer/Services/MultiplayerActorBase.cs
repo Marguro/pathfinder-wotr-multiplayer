@@ -3236,9 +3236,14 @@ namespace WOTRMultiplayer.Services
                 return indexedCharacter;
             }
 
+            // Prefer matching by UnitId; only fall back to Name when a character has no UnitId
+            // yet. The previous `A && B || C` form (no parentheses) let the Name fallback match
+            // unconditionally whenever both candidates' Name happened to be equal (including
+            // both being null, as with two not-yet-named New Campaign placeholder characters),
+            // silently resolving to the wrong character regardless of UnitId.
             var actualCharacter = Game.Characters.FirstOrDefault(x => !string.IsNullOrEmpty(x.UnitId)
-                && string.Equals(x.UnitId, character.UnitId, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(x.Name, character.Name, StringComparison.OrdinalIgnoreCase));
+                ? string.Equals(x.UnitId, character.UnitId, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(x.Name, character.Name, StringComparison.OrdinalIgnoreCase));
 
             return actualCharacter;
         }
