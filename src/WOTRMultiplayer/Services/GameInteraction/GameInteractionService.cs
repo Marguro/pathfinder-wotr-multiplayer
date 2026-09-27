@@ -472,16 +472,22 @@ namespace WOTRMultiplayer.Services.GameInteraction
                 {
                     // built the same way the main character's own m_ChargenUnit is built, but using
                     // UnitHelper.CustomCompanion() rather than Game.NewGamePreset.PlayerCharacter, which
-                    // is reserved for the actual protagonist and may carry protagonist-only baggage
+                    // is reserved for the actual protagonist and may carry protagonist-only baggage.
+                    // Unlike the protagonist, do NOT AttachToViewOnLoad here: LevelUpController.SetupNewCharacter()
+                    // only routes a CustomCompanion unit through EntityCreationController.AddEntity(Unit,
+                    // Player.CrossSceneState) - which unconditionally touches Game.Instance.CrossSceneRoot,
+                    // still null pre-game since it's only created once an area scene actually loads - when
+                    // Unit.View is already non-null at Commit() time. Leaving View null here lets that call
+                    // no-op; SetupNewCharacter attaches the view itself right after, via a null-safe check.
                     unit = new UnitEntityData(unitId, isInGame: false, Kingmaker.UnitLogic.UnitHelper.CustomCompanion());
-                    unit.AttachToViewOnLoad(null);
                 }
 
-                // mirrors the pre-game wiring (SetEnterNewGameAction) used for the host's own chargen,
-                // not the in-game SetOnCommit wiring Player.CreateCustomCompanion uses, since this still
-                // runs in the pre-game main-menu context
+                // Use SetOnCommit, not SetEnterNewGameAction: CharGenContextVM.HandleLevelUpStart only wires
+                // up EnterNewGameAction when the unit is NOT a custom companion, so that callback would never
+                // fire for this unit. SetOnCommit (the same hook Player.CreateCustomCompanion uses in-game) is
+                // invoked unconditionally from inside LevelUpController.Commit(), regardless of blueprint.
                 Kingmaker.UnitLogic.Class.LevelUp.LevelUpConfig.Create(unit, Kingmaker.UnitLogic.Class.LevelUp.LevelUpState.CharBuildMode.CharGen)
-                    .SetEnterNewGameAction(() => onCommitted?.Invoke(unit))
+                    .SetOnCommit(_ => onCommitted?.Invoke(unit))
                     .OpenUI();
             });
         }

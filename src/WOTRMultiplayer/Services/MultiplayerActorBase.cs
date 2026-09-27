@@ -3535,7 +3535,8 @@ namespace WOTRMultiplayer.Services
 
             if (pendingCharacter != null)
             {
-                Logger.LogInformation("Starting pending New Campaign companion creation. UnitId={UnitId}", pendingCharacter.UnitId);
+                var unitId = pendingCharacter.UnitId;
+                Logger.LogInformation("Starting pending New Campaign companion creation. UnitId={UnitId}", unitId);
 
                 // OnForceLevelingUI must not run synchronously here: this method can itself be running
                 // nested inside the previous character's still-unwinding CharGenVM.Complete() call (via
@@ -3546,9 +3547,9 @@ namespace WOTRMultiplayer.Services
                 // CanMakeLevelingDecisions() for it. Deferring both calls into the same posted callback
                 // used to open the UI ensures they run only after the previous completion has fully finished.
                 GameInteraction.StartNewGameCompanionCreation(
-                    pendingCharacter.UnitId,
-                    onBeforeOpen: () => OnForceLevelingUI(pendingCharacter.UnitId, NetworkLevelingType.NewGameCompanion),
-                    onCommitted: OnNewGameCompanionCommitted);
+                    unitId,
+                    onBeforeOpen: () => OnForceLevelingUI(unitId, NetworkLevelingType.NewGameCompanion),
+                    onCommitted: unit => OnNewGameCompanionCommitted(unitId, unit));
                 return;
             }
 
@@ -3556,10 +3557,13 @@ namespace WOTRMultiplayer.Services
             GameInteraction.EnterNewGame();
         }
 
-        protected void OnNewGameCompanionCommitted(UnitEntityData unit)
+        protected void OnNewGameCompanionCommitted(string unitId, UnitEntityData unit)
         {
+            // track the placeholder slot's own UnitId, not unit.UniqueId - the two are not guaranteed to
+            // come back out equal, which previously left the slot looking permanently unbuilt and caused
+            // its chargen to be reopened in an infinite loop
+            _builtNewGameCompanionUnitIds.Add(unitId);
             _pendingNewGameCompanions.Add(unit);
-            _builtNewGameCompanionUnitIds.Add(unit.UniqueId);
             ProceedAfterCharacterCreated();
         }
 
