@@ -2241,6 +2241,10 @@ namespace WOTRMultiplayer.Services
                         // everyone already connected also needs to see the newly added slot
                         Send(lobbyCharactersChanged);
                         Logger.LogInformation("New chargen slot has been added for New Campaign. CharactersCount={CharactersCount}", Game.Characters.Count);
+
+                        // the host doesn't receive its own NotifyLobbyCharactersChanged broadcast, so its lobby UI
+                        // must be refreshed directly or the new slot's owner dropdown never becomes usable.
+                        OnCharactersChanged?.Invoke(Game.StartUp?.Title, Game.Characters);
                     }
 
                     InvokeOnPlayersChanged();
