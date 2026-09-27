@@ -453,7 +453,22 @@ namespace WOTRMultiplayer.Services.GameInteraction
         {
             _mainThreadAccessor.Post(() =>
             {
-                Game.Instance.RootUiContext.MainMenuVM.EnterNewGame();
+                var mainMenuVM = Game.Instance.RootUiContext.MainMenuVM;
+
+                // Every companion chargen opened after the host's own (still in the main-menu context)
+                // re-triggers LevelUpController.SelectPregen(), which unconditionally reassigns
+                // Player.MainCharacter/Game.NewGameUnit to whichever unit's wizard is currently open -
+                // see CharGenPregenPhaseVM's constructor, which defaults to the first pregen entry and
+                // fires that reassignment the instant the wizard opens. That silently evicts the host's
+                // already-built character from Player.PartyCharacters. Restore it here, right before the
+                // game actually starts, so the party isn't empty when the new area finishes loading.
+                if (mainMenuVM.m_ChargenUnit != null)
+                {
+                    Game.NewGameUnit = mainMenuVM.m_ChargenUnit;
+                    Game.Instance.Player.SetMainCharacter(mainMenuVM.m_ChargenUnit);
+                }
+
+                mainMenuVM.EnterNewGame();
             });
         }
 
