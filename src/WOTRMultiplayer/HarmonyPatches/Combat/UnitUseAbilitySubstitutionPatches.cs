@@ -27,7 +27,7 @@ namespace WOTRMultiplayer.HarmonyPatches.Combat
             var replaceWith = AccessTools.Method(typeof(UnitUseAbilitySubstitutionPatches), nameof(UnitUseAbilitySubstitutionPatches.ShuffleSpells));
             var matcher = new CodeMatcher(instructions);
             var lookFor = $"Void {nameof(LinqExtensions.Shuffle)}";
-            var match = matcher.SearchForward(x => x.opcode == OpCodes.Call && (x.operand?.ToString().Contains(lookFor, StringComparison.OrdinalIgnoreCase) ?? false));
+            var match = matcher.SearchForward(x => x.opcode == OpCodes.Call && (x.operand?.ToString().IndexOf(lookFor, StringComparison.OrdinalIgnoreCase) >= 0));
             if (match.IsInvalid)
             {
                 Main.GetLogger<UnitUseAbilitySubstitutionPatches>().LogError("Invalid transpiler position. Target={Target}", target);

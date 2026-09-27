@@ -31,7 +31,7 @@ namespace WOTRMultiplayer.HarmonyPatches.Leveling
             { typeof(CharGenVoiceItemPCView),  x => LevelingVoiceSelected((CharGenVoiceItemVM)x.ViewModel) },
         };
 
-        [HarmonyPatch(typeof(SelectionGroupEntityView<SelectionGroupEntityVM>), nameof(SelectionGroupEntityView<>.OnClick))]
+        [HarmonyPatch(typeof(SelectionGroupEntityView<SelectionGroupEntityVM>), nameof(SelectionGroupEntityView<SelectionGroupEntityVM>.OnClick))]
         [HarmonyPrefix]
         public static bool SelectionGroupEntityView_OnClick_Prefix(SelectionGroupEntityView<SelectionGroupEntityVM> __instance)
         {
@@ -71,7 +71,7 @@ namespace WOTRMultiplayer.HarmonyPatches.Leveling
             return canContinue;
         }
 
-        [HarmonyPatch(typeof(SelectionGroupEntityView<SelectionGroupEntityVM>), nameof(SelectionGroupEntityView<>.BindViewImplementation))]
+        [HarmonyPatch(typeof(SelectionGroupEntityView<SelectionGroupEntityVM>), nameof(SelectionGroupEntityView<SelectionGroupEntityVM>.BindViewImplementation))]
         [HarmonyPostfix]
         public static void SelectionGroupEntityView_BindViewImplementation_Postfix(SelectionGroupEntityView<SelectionGroupEntityVM> __instance)
         {

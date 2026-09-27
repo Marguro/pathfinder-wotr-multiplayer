@@ -28,7 +28,7 @@ namespace WOTRMultiplayer.Services.Settings
                     var settingName = setting.GetCustomAttribute<DescriptionAttribute>().Description;
                     var key = string.Join(KeyPathSeparator, RootKey, sectionName, settingName);
                     var actualValue = setting.GetValue(null);
-                    var keyProperty = actualValue.GetType().GetProperty(nameof(WellKnownSettingKey<>.Key));
+                    var keyProperty = actualValue.GetType().GetProperty(nameof(WellKnownSettingKey<object>.Key));
                     keyProperty.SetValue(actualValue, key);
                 }
             }

@@ -174,7 +174,7 @@ namespace WOTRMultiplayer.HarmonyPatches.NewGameSequence
 
         private static FieldInfo GetField(IUISettingsEntityWithValueBase settingEntity)
         {
-            var field = settingEntity.GetType().GetField(nameof(UISettingsEntityWithValueBase<>.ManualModificationLock));
+            var field = settingEntity.GetType().GetField(nameof(UISettingsEntityWithValueBase<bool>.ManualModificationLock));
             return field;
         }
     }
