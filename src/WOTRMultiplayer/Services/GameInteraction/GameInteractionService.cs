@@ -511,6 +511,20 @@ namespace WOTRMultiplayer.Services.GameInteraction
         {
             _mainThreadAccessor.Post(() =>
             {
+                // Unit.View was already created once, pre-game, by vanilla's own
+                // LevelUpController.SetupNewCharacter() during chargen Commit() - but that ran
+                // before any area scene existed, so the view's GameObject was never parented under
+                // Game.Instance.CrossSceneRoot (SetupNewCharacter null-guards that step) and does not
+                // survive the scene load into the actual game area. Recreate it now that we're inside
+                // OnAreaLoaded, i.e. once CrossSceneRoot genuinely exists - this mirrors vanilla's own
+                // Player.CreateImportedCompanion sequence (destroy the stale view, then
+                // AttachToViewOnLoad(null) to spawn a fresh one, then AddCompanion/IsInGame/Position).
+                if (unit.View != null)
+                {
+                    Kingmaker.Utility.Utils.EditorSafeDestroy(unit.View);
+                }
+                unit.AttachToViewOnLoad(null);
+
                 Game.Instance.Player.AddCompanion(unit);
                 unit.IsInGame = true;
                 unit.Position = Game.Instance.Player.MainCharacter.Value.Position;
