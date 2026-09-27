@@ -402,6 +402,13 @@ namespace WOTRMultiplayer.Services
             Logger.LogInformation("OnAreaLoaded. AreaName={AreaName}", Game.CurrentArea?.Name);
             Game.ForcedPause.ReadyPlayers.Add(Game.LocalPlayerId);
 
+            // vanilla's GameLoaded warning (relied on by OnGameLoaded/MultiplayerSubscriber) does not
+            // reliably fire on a fresh New Campaign start, which left the party missing every
+            // non-host companion. OnAreaLoaded is the first dependable per-machine signal that the
+            // session has actually started, so attach here too; the list is cleared after attaching,
+            // so this is a no-op on every subsequent area transition.
+            AttachPendingNewGameCompanions();
+
             if (Game.CurrentArea.IsGlobalMap)
             {
                 if (!Game.PlayersInGlobalMapMode.TryGetValue(Game.LocalPlayerId, out var mode))
@@ -488,8 +495,13 @@ namespace WOTRMultiplayer.Services
             var settings = new NetworkGameSettings { Tutorial = new NetworkTutorialSettings() };
             GameInteraction.ApplyGameSettings(settings);
 
-            // every pending New Campaign companion has necessarily finished chargen by now, since
-            // EnterNewGame() is only ever called from ProceedAfterCharacterCreated() once nothing is left pending
+            AttachPendingNewGameCompanions();
+        }
+
+        // every pending New Campaign companion has necessarily finished chargen by now, since
+        // EnterNewGame() is only ever called from ProceedAfterCharacterCreated() once nothing is left pending
+        private void AttachPendingNewGameCompanions()
+        {
             foreach (var unit in _pendingNewGameCompanions)
             {
                 GameInteraction.AttachNewGameCompanionToParty(unit);
