@@ -2211,19 +2211,22 @@ namespace WOTRMultiplayer.Services
                     Send(playersChanged);
 
                     // for a brand new campaign, grow the number of chargen slots to match however many players
-                    // actually connect (up to the party size limit), so every additional player gets their own slot
+                    // actually connect (up to the party size limit), so every additional player gets their own slot.
+                    // Slot ownership is assigned later by players via the lobby owner dropdown, so slot count must
+                    // track connected player count directly rather than waiting for every existing slot to be owned.
                     var addedNewSlot = false;
-                    if (Status == NetworkLobbyStage.Lobby
-                        && Game.StartUp?.IsNewGameSequence == true
-                        && Game.Characters.Count < Main.MaxCharactersInParty
-                        && Game.Characters.All(c => c.Owner != null))
+                    if (Status == NetworkLobbyStage.Lobby && Game.StartUp?.IsNewGameSequence == true)
                     {
-                        Game.Characters.Add(new NetworkCharacter
+                        var targetSlotCount = Math.Min(Main.MaxCharactersInParty, Game.Players.Count);
+                        while (Game.Characters.Count < targetSlotCount)
                         {
-                            Portrait = Game.Characters[0].Portrait,
-                            UnitId = Guid.NewGuid().ToString()
-                        });
-                        addedNewSlot = true;
+                            Game.Characters.Add(new NetworkCharacter
+                            {
+                                Portrait = Game.Characters[0].Portrait,
+                                UnitId = Guid.NewGuid().ToString()
+                            });
+                            addedNewSlot = true;
+                        }
                     }
 
                     var lobbyCharactersChanged = new NotifyLobbyCharactersChanged
