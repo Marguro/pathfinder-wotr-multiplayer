@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Kingmaker.EntitySystem;
+using Kingmaker.EntitySystem.Entities;
 using Kingmaker.GameModes;
 using Kingmaker.Items.Slots;
 using WOTRMultiplayer.Entities;
@@ -169,6 +170,12 @@ namespace WOTRMultiplayer.Abstractions.GameInteraction
         void ToggleCharacterSelectionWindow(string unitId);
 
         void StartNewGameSequence(string mainCharacterId, Action onBack, Action onStart, Action<NetworkCharacter> onCharacterCreated);
+
+        void EnterNewGame();
+
+        void StartNewGameCompanionCreation(string unitId, Action<UnitEntityData> onCommitted);
+
+        void AttachNewGameCompanionToParty(UnitEntityData unit);
 
         void SelectNewGameDifficulty(string difficulty);
 

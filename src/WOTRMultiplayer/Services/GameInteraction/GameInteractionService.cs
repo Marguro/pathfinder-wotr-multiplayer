@@ -407,8 +407,9 @@ namespace WOTRMultiplayer.Services.GameInteraction
                         Name = mainMenuVM.m_ChargenUnit.CharacterName,
                         UnitId = mainMenuVM.m_ChargenUnit.UniqueId
                     };
+                    // the game is no longer entered automatically here - the caller decides when every
+                    // connected player has finished their own character creation via EnterNewGame()
                     onCharacterCreated?.Invoke(character);
-                    mainMenuVM.EnterNewGame();
                 }
 
                 void NextStep()
@@ -445,6 +446,49 @@ namespace WOTRMultiplayer.Services.GameInteraction
                 mainMenuVM.NewGameVM = new NewGameVM(PreviousStep, NextStep);
                 mainMenuVM.m_OpenNewGameCommand.Execute();
                 mainMenuVM.UpdateSoundState();
+            });
+        }
+
+        public void EnterNewGame()
+        {
+            _mainThreadAccessor.Post(() =>
+            {
+                Game.Instance.RootUiContext.MainMenuVM.EnterNewGame();
+            });
+        }
+
+        public void StartNewGameCompanionCreation(string unitId, Action<UnitEntityData> onCommitted)
+        {
+            _mainThreadAccessor.Post(() =>
+            {
+                UnitEntityData unit;
+                using (ContextData<UnitEntityData.ChargenUnit>.Request())
+                {
+                    // built the same way the main character's own m_ChargenUnit is built, but using
+                    // UnitHelper.CustomCompanion() rather than Game.NewGamePreset.PlayerCharacter, which
+                    // is reserved for the actual protagonist and may carry protagonist-only baggage
+                    unit = new UnitEntityData(unitId, isInGame: false, Kingmaker.UnitLogic.UnitHelper.CustomCompanion());
+                    unit.AttachToViewOnLoad(null);
+                }
+
+                // mirrors the pre-game wiring (SetEnterNewGameAction) used for the host's own chargen,
+                // not the in-game SetOnCommit wiring Player.CreateCustomCompanion uses, since this still
+                // runs in the pre-game main-menu context
+                Kingmaker.UnitLogic.Class.LevelUp.LevelUpConfig.Create(unit, Kingmaker.UnitLogic.Class.LevelUp.LevelUpState.CharBuildMode.CharGen)
+                    .SetEnterNewGameAction(() => onCommitted?.Invoke(unit))
+                    .OpenUI();
+            });
+        }
+
+        public void AttachNewGameCompanionToParty(UnitEntityData unit)
+        {
+            _mainThreadAccessor.Post(() =>
+            {
+                Game.Instance.Player.AddCompanion(unit);
+                unit.IsInGame = true;
+                unit.Position = Game.Instance.Player.MainCharacter.Value.Position;
+
+                _logger.LogInformation("New Campaign companion has been attached to the party. UnitId={UnitId}", unit.UniqueId);
             });
         }
 

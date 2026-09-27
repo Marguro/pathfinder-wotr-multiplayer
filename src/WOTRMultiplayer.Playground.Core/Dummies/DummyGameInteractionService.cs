@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Kingmaker.EntitySystem;
+using Kingmaker.EntitySystem.Entities;
 using Kingmaker.GameModes;
 using Kingmaker.Items.Slots;
 using WOTRMultiplayer.Abstractions.GameInteraction;
@@ -65,6 +66,10 @@ namespace WOTRMultiplayer.Playground.Core.Dummies
         {
         }
 
+        public void AttachNewGameCompanionToParty(UnitEntityData unit)
+        {
+        }
+
         public void ChangeUnitStealth(string unitId, bool isEnabled, bool isForced)
         {
         }
@@ -119,6 +124,10 @@ namespace WOTRMultiplayer.Playground.Core.Dummies
         }
 
         public void DropItem(NetworkDropItem networkDropItem)
+        {
+        }
+
+        public void EnterNewGame()
         {
         }
 
@@ -289,6 +298,10 @@ namespace WOTRMultiplayer.Playground.Core.Dummies
         }
 
         public void StartNewGameSequence(string mainCharacterId, Action onBack, Action onStart, Action<NetworkCharacter> onCharacterCreated)
+        {
+        }
+
+        public void StartNewGameCompanionCreation(string unitId, Action<UnitEntityData> onCommitted)
         {
         }
 
