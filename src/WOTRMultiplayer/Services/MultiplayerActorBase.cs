@@ -63,6 +63,11 @@ namespace WOTRMultiplayer.Services
         // (nothing is in the party at this pre-game point, so live-party lookups can't be used instead)
         private readonly List<UnitEntityData> _pendingNewGameCompanions = [];
 
+        // UnitIds of New Campaign companion slots that have already been built, keyed by the placeholder
+        // NetworkCharacter's UnitId decided up front - not by the committed UnitEntityData's own UniqueId,
+        // which is not guaranteed to come back out equal to the id it was constructed with
+        private readonly HashSet<string> _builtNewGameCompanionUnitIds = new(StringComparer.OrdinalIgnoreCase);
+
         public NetworkArea CurrentArea => Game.CurrentArea;
 
         public bool IsInCombat => Game?.Combat != null;
@@ -3526,7 +3531,7 @@ namespace WOTRMultiplayer.Services
         {
             var pendingCharacter = Game.Characters
                 .Skip(1)
-                .FirstOrDefault(c => c.Owner != null && !_pendingNewGameCompanions.Any(u => string.Equals(u.UniqueId, c.UnitId, StringComparison.OrdinalIgnoreCase)));
+                .FirstOrDefault(c => c.Owner != null && !_builtNewGameCompanionUnitIds.Contains(c.UnitId));
 
             if (pendingCharacter != null)
             {
@@ -3554,6 +3559,7 @@ namespace WOTRMultiplayer.Services
         protected void OnNewGameCompanionCommitted(UnitEntityData unit)
         {
             _pendingNewGameCompanions.Add(unit);
+            _builtNewGameCompanionUnitIds.Add(unit.UniqueId);
             ProceedAfterCharacterCreated();
         }
 
