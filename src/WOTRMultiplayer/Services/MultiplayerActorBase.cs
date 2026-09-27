@@ -3532,8 +3532,18 @@ namespace WOTRMultiplayer.Services
             {
                 Logger.LogInformation("Starting pending New Campaign companion creation. UnitId={UnitId}", pendingCharacter.UnitId);
 
-                OnForceLevelingUI(pendingCharacter.UnitId, NetworkLevelingType.NewGameCompanion);
-                GameInteraction.StartNewGameCompanionCreation(pendingCharacter.UnitId, OnNewGameCompanionCommitted);
+                // OnForceLevelingUI must not run synchronously here: this method can itself be running
+                // nested inside the previous character's still-unwinding CharGenVM.Complete() call (via
+                // its onCharacterCreated/onCommitted callback), and that call's Harmony postfix -
+                // MultiplayerActorBase.OnLevelingCompleted() - nulls Game.Leveling once it finally returns.
+                // Setting Game.Leveling for this companion before that postfix runs means it immediately
+                // gets wiped out from under the companion's about-to-open chargen, permanently disabling
+                // CanMakeLevelingDecisions() for it. Deferring both calls into the same posted callback
+                // used to open the UI ensures they run only after the previous completion has fully finished.
+                GameInteraction.StartNewGameCompanionCreation(
+                    pendingCharacter.UnitId,
+                    onBeforeOpen: () => OnForceLevelingUI(pendingCharacter.UnitId, NetworkLevelingType.NewGameCompanion),
+                    onCommitted: OnNewGameCompanionCommitted);
                 return;
             }
 

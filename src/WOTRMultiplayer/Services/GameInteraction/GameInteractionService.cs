@@ -457,10 +457,16 @@ namespace WOTRMultiplayer.Services.GameInteraction
             });
         }
 
-        public void StartNewGameCompanionCreation(string unitId, Action<UnitEntityData> onCommitted)
+        public void StartNewGameCompanionCreation(string unitId, Action onBeforeOpen, Action<UnitEntityData> onCommitted)
         {
             _mainThreadAccessor.Post(() =>
             {
+                // must run in this same posted callback, after the still-unwinding call stack of the
+                // previous character's CharGenVM.Complete() (and its Harmony postfix) has finished -
+                // calling it synchronously from ProceedAfterCharacterCreated() races the postfix, which
+                // nulls out Game.Leveling right after it gets set for this companion
+                onBeforeOpen?.Invoke();
+
                 UnitEntityData unit;
                 using (ContextData<UnitEntityData.ChargenUnit>.Request())
                 {

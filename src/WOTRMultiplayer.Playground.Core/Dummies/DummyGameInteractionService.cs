@@ -301,7 +301,7 @@ namespace WOTRMultiplayer.Playground.Core.Dummies
         {
         }
 
-        public void StartNewGameCompanionCreation(string unitId, Action<UnitEntityData> onCommitted)
+        public void StartNewGameCompanionCreation(string unitId, Action onBeforeOpen, Action<UnitEntityData> onCommitted)
         {
         }
 

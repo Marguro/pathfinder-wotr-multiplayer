@@ -173,7 +173,7 @@ namespace WOTRMultiplayer.Abstractions.GameInteraction
 
         void EnterNewGame();
 
-        void StartNewGameCompanionCreation(string unitId, Action<UnitEntityData> onCommitted);
+        void StartNewGameCompanionCreation(string unitId, Action onBeforeOpen, Action<UnitEntityData> onCommitted);
 
         void AttachNewGameCompanionToParty(UnitEntityData unit);
 
