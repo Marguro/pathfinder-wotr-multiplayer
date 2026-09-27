@@ -71,7 +71,7 @@ namespace WOTRMultiplayer.UI
                 atlas.GetSprites(sprites);
                 foreach (var sprite in sprites)
                 {
-                    var name = sprite.name.Trim("(Clone)").ToString();
+                    var name = sprite.name.Replace("(Clone)", string.Empty);
                     container.TryAdd(name, sprite);
                 }
             }
