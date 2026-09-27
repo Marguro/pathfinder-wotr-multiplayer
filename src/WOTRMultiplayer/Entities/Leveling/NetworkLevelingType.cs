@@ -6,6 +6,7 @@
         MythicLeveling,
         Mercenary,
         NewGameSequence,
+        NewGameCompanion,
         DungeonRestart
     }
 }

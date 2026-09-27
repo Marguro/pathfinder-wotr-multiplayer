@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using Kingmaker.Controllers.Rest;
+using Kingmaker.EntitySystem.Entities;
 using Kingmaker.GameModes;
 using Kingmaker.UI.Kingdom;
 using Kingmaker.Utility;
@@ -57,6 +58,10 @@ namespace WOTRMultiplayer.Services
         private SeedKind[] AllSeeds { get; } = [.. Enum.GetValues(typeof(SeedKind)).Cast<SeedKind>().Where(s => s != SeedKind.All)];
 
         private DateTime? _pauseCooldown;
+
+        // pre-game New Campaign companions that have finished chargen but aren't in the party yet
+        // (nothing is in the party at this pre-game point, so live-party lookups can't be used instead)
+        private readonly List<UnitEntityData> _pendingNewGameCompanions = [];
 
         public NetworkArea CurrentArea => Game.CurrentArea;
 
@@ -477,6 +482,15 @@ namespace WOTRMultiplayer.Services
             // Tutorial settings are save-dependent, so they must be overridden if the save was created without the mod
             var settings = new NetworkGameSettings { Tutorial = new NetworkTutorialSettings() };
             GameInteraction.ApplyGameSettings(settings);
+
+            // every pending New Campaign companion has necessarily finished chargen by now, since
+            // EnterNewGame() is only ever called from ProceedAfterCharacterCreated() once nothing is left pending
+            foreach (var unit in _pendingNewGameCompanions)
+            {
+                GameInteraction.AttachNewGameCompanionToParty(unit);
+            }
+
+            _pendingNewGameCompanions.Clear();
         }
 
         public void OnPing(NetworkPing ping)
@@ -974,6 +988,10 @@ namespace WOTRMultiplayer.Services
             {
                 // we don't have character id yet, so we rely on 'fake' character
                 NetworkLevelingType.NewGameSequence => Game.Characters.FirstOrDefault()?.Owner?.Id == Game.LocalPlayerId,
+                // resolved by the specific unit being leveled, not by "the first character",
+                // so each connected player only controls their own New Campaign companion's chargen
+                NetworkLevelingType.NewGameCompanion => Game.Characters
+                    .FirstOrDefault(c => c.UnitId == Game.Leveling.UnitId)?.Owner?.Id == Game.LocalPlayerId,
                 NetworkLevelingType.Mercenary => HasControlOverUI,
                 // either this character has been controlled by someone previously (and that player is still in lobby) or fallback to default
                 _ => WasControlledByCurrentPlayer(Game.Leveling.UnitId),
@@ -1532,7 +1550,7 @@ namespace WOTRMultiplayer.Services
             {
                 NetworkLevelingType.MythicLeveling => WellKnownKeys.GameNotifications.Leveling.MythicLeveling.Terminated.Key,
                 NetworkLevelingType.Mercenary => WellKnownKeys.GameNotifications.Leveling.Mercenary.Terminated.Key,
-                NetworkLevelingType.NewGameSequence => null,
+                NetworkLevelingType.NewGameSequence or NetworkLevelingType.NewGameCompanion => null,
                 NetworkLevelingType.Leveling or _ => WellKnownKeys.GameNotifications.Leveling.Terminated.Key
             };
 
@@ -1558,7 +1576,7 @@ namespace WOTRMultiplayer.Services
             {
                 NetworkLevelingType.MythicLeveling => WellKnownKeys.GameNotifications.Leveling.MythicLeveling.Completed.Key,
                 NetworkLevelingType.Mercenary => WellKnownKeys.GameNotifications.Leveling.Mercenary.Completed.Key,
-                NetworkLevelingType.NewGameSequence or NetworkLevelingType.DungeonRestart => null,
+                NetworkLevelingType.NewGameSequence or NetworkLevelingType.NewGameCompanion or NetworkLevelingType.DungeonRestart => null,
                 NetworkLevelingType.Leveling or _ => WellKnownKeys.GameNotifications.Leveling.Completed.Key,
             };
 
@@ -3493,7 +3511,40 @@ namespace WOTRMultiplayer.Services
                     var fakeCharacter = Game.Characters.First();
                     fakeCharacter.Name = character.Name;
                     fakeCharacter.Portrait = character.Portrait;
+
+                    ProceedAfterCharacterCreated();
                 });
+        }
+
+        /// <summary>
+        /// Every connected player's chargen must complete before the game/world loads at all.
+        /// Scans for the next connected player who owns a character slot but hasn't finished
+        /// building it yet, and opens their character creation. Once nobody is left pending,
+        /// this is the only place the game is ever allowed to actually start.
+        /// </summary>
+        protected void ProceedAfterCharacterCreated()
+        {
+            var pendingCharacter = Game.Characters
+                .Skip(1)
+                .FirstOrDefault(c => c.Owner != null && !_pendingNewGameCompanions.Any(u => string.Equals(u.UniqueId, c.UnitId, StringComparison.OrdinalIgnoreCase)));
+
+            if (pendingCharacter != null)
+            {
+                Logger.LogInformation("Starting pending New Campaign companion creation. UnitId={UnitId}", pendingCharacter.UnitId);
+
+                OnForceLevelingUI(pendingCharacter.UnitId, NetworkLevelingType.NewGameCompanion);
+                GameInteraction.StartNewGameCompanionCreation(pendingCharacter.UnitId, OnNewGameCompanionCommitted);
+                return;
+            }
+
+            Logger.LogInformation("Every New Campaign character has been created - entering the game");
+            GameInteraction.EnterNewGame();
+        }
+
+        protected void OnNewGameCompanionCommitted(UnitEntityData unit)
+        {
+            _pendingNewGameCompanions.Add(unit);
+            ProceedAfterCharacterCreated();
         }
 
         protected virtual void OnSaveGameChunkSaved(int chunkNumber)
