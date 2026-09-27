@@ -525,6 +525,20 @@ namespace WOTRMultiplayer.Services.GameInteraction
                 }
                 unit.AttachToViewOnLoad(null);
 
+                // AttachToViewOnLoad swallows a failed view/prefab load silently whenever
+                // IsInGame is still false (which it is here, since we only set it below) -
+                // vanilla's own error logging for that case is gated on IsInGame already
+                // being true. Surface it ourselves so a null View/CharacterAvatar here -
+                // which would otherwise NRE much later and more confusingly inside vanilla's
+                // TeleportParty.LoadProcess (see TeleportPartyLoadProcessPatches) - is visible
+                // in our own logs right at the point it actually happened.
+                if (unit.View == null || unit.View.CharacterAvatar == null)
+                {
+                    _logger.LogWarning(
+                        "New Campaign companion's view failed to attach properly. UnitId={UnitId}, HasView={HasView}, HasAvatar={HasAvatar}",
+                        unit.UniqueId, unit.View != null, unit.View?.CharacterAvatar != null);
+                }
+
                 Game.Instance.Player.AddCompanion(unit);
                 unit.IsInGame = true;
                 unit.Position = Game.Instance.Player.MainCharacter.Value.Position;
